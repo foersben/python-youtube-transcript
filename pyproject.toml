@@ -12,6 +12,8 @@ youtube-transcript-api = "^1.1.1"
 google-genai = "^1.25.0"
 python-dotenv = "^1.1.1"
 flask = "^3.1.1"
+pytube = "^15.0.0"
+pydub = "^0.25.1"
 
 [settings]
 [settings.virtualenvs]

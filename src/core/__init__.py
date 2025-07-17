@@ -7,6 +7,7 @@ from src.core.formatting import (
     format_sections_for_youtube,
     format_transcript_for_display,
 )
+from src.core.gemini import request_gemini
 
 __all__ = [
     "extract_video_id",
@@ -14,4 +15,5 @@ __all__ = [
     "create_section_timestamps",
     "format_sections_for_youtube",
     "format_transcript_for_display",
+    "request_gemini",
 ]

@@ -58,3 +58,27 @@ def format_transcript_for_display(transcript: list[dict[str, Any]]) -> str:
     """
 
     return "\n".join(f"[{seg['start']:.1f}s] {seg['text']}" for seg in transcript)
+
+
+def format_transcript_with_speakers(transcript: list[dict[str, Any]]) -> str:
+    """Formats transcript with speaker segmentation for detailed display.
+
+    Args:
+        transcript: Transcript with 'speaker' information
+
+    Returns:
+        Formatted text with speaker sections
+    """
+
+    output = []
+    current_speaker = None
+
+    for seg in transcript:
+        if "speaker" in seg:
+            if seg["speaker"] != current_speaker:
+                current_speaker = seg["speaker"]
+                output.append(f"\n### Speaker: {current_speaker}\n")
+
+        output.append(f"[{seg['start']:.1f}s] {seg['text']}")
+
+    return "\n".join(output)

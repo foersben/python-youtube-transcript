@@ -11,7 +11,7 @@
     <div class="container">
         <header>
             <h1>YouTube Section Generator</h1>
-            <p>Automatically create timestamped sections for YouTube videos</p>
+            <p>Automatically create timestamped sections with speaker recognition</p>
         </header>
         
         <main>
@@ -27,6 +27,23 @@
                         <label for="translate_to">Translate to:</label>
                         <input type="text" id="translate_to" placeholder="e.g., en">
                         <small>Leave blank for original language</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="enable_speakers">
+                            <span class="toggle-slider"></span>
+                            Enable Speaker Recognition
+                        </label>
+                        <small>Requires audio processing</small>
+                    </div>
+                    
+                    <div id="speaker-settings" class="hidden">
+                        <div class="form-group">
+                            <label for="known_speakers">Known Speakers (JSON):</label>
+                            <textarea id="known_speakers" rows="4" placeholder='[{"name": "John", "description": "Deep voice"}, ...]'></textarea>
+                            <small>Optional list of known speakers</small>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -62,20 +79,44 @@
             </div>
             
             <div class="result-section hidden">
-                <h2>Generated Sections for: <span id="result-video-id"></span></h2>
-                <div class="result-container">
-                    <pre id="section-output"></pre>
+                <div class="tabs">
+                    <button class="tab active" data-tab="sections">Sections</button>
+                    <button class="tab" data-tab="transcript">Transcript</button>
                 </div>
-                <div class="actions">
-                    <button id="copy-btn">Copy to Clipboard</button>
-                    <button id="download-btn">Download as TXT</button>
+                
+                <div class="tab-content">
+                    <div id="sections-view" class="tab-pane active">
+                        <h2>Generated Sections for: <span id="result-video-id"></span></h2>
+                        <div class="result-container">
+                            <pre id="section-output"></pre>
+                        </div>
+                        <div class="actions">
+                            <button id="copy-btn">Copy to Clipboard</button>
+                            <button id="download-btn">Download as TXT</button>
+                        </div>
+                    </div>
+                    
+                    <div id="transcript-view" class="tab-pane">
+                        <h2>Transcript with Speakers: <span id="transcript-video-id"></span></h2>
+                        <div class="result-container">
+                            <pre id="transcript-output"></pre>
+                        </div>
+                        <div class="actions">
+                            <button id="copy-transcript-btn">Copy Transcript</button>
+                            <button id="download-transcript-btn">Download Transcript</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="global-actions">
                     <button id="new-video-btn">Process Another Video</button>
                 </div>
             </div>
             
             <div class="loading hidden">
                 <div class="spinner"></div>
-                <p>Generating sections...</p>
+                <p>Processing video. This may take several minutes...</p>
+                <p class="progress-note">Speaker recognition requires audio analysis</p>
             </div>
             
             <div class="error hidden">
@@ -84,66 +125,89 @@
         </main>
         
         <footer>
-            <p>Powered by Google Gemini AI | Python YouTube Transcript Tool</p>
+			<p>Powered by Google Gemini AI | <a href="https://github.com/jdepoix/youtube-transcript-api">YouTube Transcript API</a>
         </footer>
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Elements
             const videoIdInput = document.getElementById('video_id');
+            const enableSpeakers = document.getElementById('enable_speakers');
+            const speakerSettings = document.getElementById('speaker-settings');
             const generateBtn = document.getElementById('generate-btn');
             const resultSection = document.querySelector('.result-section');
             const loadingSection = document.querySelector('.loading');
             const errorSection = document.querySelector('.error');
+            const tabs = document.querySelectorAll('.tab');
+            const tabPanes = document.querySelectorAll('.tab-pane');
+            
+            // Output elements
             const sectionOutput = document.getElementById('section-output');
-            const copyBtn = document.getElementById('copy-btn');
-            const downloadBtn = document.getElementById('download-btn');
-            const newVideoBtn = document.getElementById('new-video-btn');
+            const transcriptOutput = document.getElementById('transcript-output');
             const resultVideoId = document.getElementById('result-video-id');
+            const transcriptVideoId = document.getElementById('transcript-video-id');
             const errorMessage = document.getElementById('error-message');
             
-            // Extract YouTube video ID from various URL formats
-            function extractVideoId(url) {
-                const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-                const match = url.match(regExp);
-                return (match && match[2].length === 11) ? match[2] : url;
-            }
+            // Toggle speaker settings
+            enableSpeakers.addEventListener('change', () => {
+                speakerSettings.classList.toggle('hidden', !enableSpeakers.checked);
+            });
             
+            // Tab switching
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabPanes.forEach(p => p.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    document.getElementById(`${tab.dataset.tab}-view`).classList.add('active');
+                });
+            });
+            
+            // Generate sections
             generateBtn.addEventListener('click', async () => {
-                let videoId = videoIdInput.value.trim();
+                const videoId = videoIdInput.value.trim();
                 if (!videoId) {
                     showError('Please enter a YouTube video ID or URL');
                     return;
                 }
                 
-                // Extract ID from URL if needed
-                videoId = extractVideoId(videoId);
+                // Extract ID from URL
+                const extractedId = extractVideoId(videoId);
                 
                 // Show loading state
                 loadingSection.classList.remove('hidden');
                 errorSection.classList.add('hidden');
+                resultSection.classList.add('hidden');
                 
                 try {
+                    const formData = new URLSearchParams({
+                        'video_id': extractedId,
+                        'translate_to': document.getElementById('translate_to').value,
+                        'min_sections': document.getElementById('min_sections').value,
+                        'max_sections': document.getElementById('max_sections').value,
+                        'min_title_words': document.getElementById('min_title_words').value,
+                        'max_title_words': document.getElementById('max_title_words').value,
+                        'enable_speakers': enableSpeakers.checked ? 'on' : 'off',
+                        'known_speakers': document.getElementById('known_speakers').value
+                    });
+                    
                     const response = await fetch('/generate-sections', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: new URLSearchParams({
-                            'video_id': videoId,
-                            'translate_to': document.getElementById('translate_to').value,
-                            'min_sections': document.getElementById('min_sections').value,
-                            'max_sections': document.getElementById('max_sections').value,
-                            'min_title_words': document.getElementById('min_title_words').value,
-                            'max_title_words': document.getElementById('max_title_words').value
-                        })
+                        body: formData
                     });
                     
                     const data = await response.json();
                     
                     if (data.success) {
-                        sectionOutput.textContent = data.sections;
-                        resultVideoId.textContent = data.video_id;
+                        sectionOutput.textContent = data.youtube_sections;
+                        transcriptOutput.textContent = data.transcript;
+                        resultVideoId.textContent = extractedId;
+                        transcriptVideoId.textContent = extractedId;
                         resultSection.classList.remove('hidden');
                     } else {
                         showError(data.error);
@@ -155,54 +219,63 @@
                 }
             });
             
-            copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(sectionOutput.textContent)
-                    .then(() => {
-                        alert('Sections copied to clipboard!');
-                    })
-                    .catch(err => {
-                        showError('Failed to copy: ' + err);
-                    });
+            // Copy and download handlers
+            document.getElementById('copy-btn').addEventListener('click', () => {
+                copyToClipboard(sectionOutput.textContent, 'Sections');
             });
             
-            downloadBtn.addEventListener('click', async () => {
-                const formData = new FormData();
-                formData.append('sections', sectionOutput.textContent);
-                formData.append('video_id', resultVideoId.textContent);
-                
-                try {
-                    const response = await fetch('/download-sections', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${resultVideoId.textContent}_sections.txt`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                    } else {
-                        const error = await response.text();
-                        showError('Download failed: ' + error);
-                    }
-                } catch (error) {
-                    showError('Download error: ' + error.message);
-                }
+            document.getElementById('copy-transcript-btn').addEventListener('click', () => {
+                copyToClipboard(transcriptOutput.textContent, 'Transcript');
             });
             
-            newVideoBtn.addEventListener('click', () => {
+            document.getElementById('download-btn').addEventListener('click', () => {
+                downloadContent(
+                    sectionOutput.textContent, 
+                    `${resultVideoId.textContent}_sections.txt`
+                );
+            });
+            
+            document.getElementById('download-transcript-btn').addEventListener('click', () => {
+                downloadContent(
+                    transcriptOutput.textContent, 
+                    `${transcriptVideoId.textContent}_transcript.txt`
+                );
+            });
+            
+            document.getElementById('new-video-btn').addEventListener('click', () => {
                 resultSection.classList.add('hidden');
                 videoIdInput.value = '';
                 videoIdInput.focus();
             });
             
+            // Helper functions
+            function extractVideoId(url) {
+                const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                const match = url.match(regExp);
+                return (match && match[2].length === 11) ? match[2] : url;
+            }
+            
             function showError(message) {
                 errorMessage.textContent = message;
                 errorSection.classList.remove('hidden');
+            }
+            
+            function copyToClipboard(text, label) {
+                navigator.clipboard.writeText(text)
+                    .then(() => alert(`${label} copied to clipboard!`))
+                    .catch(err => showError('Failed to copy: ' + err));
+            }
+            
+            function downloadContent(content, filename) {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             }
         });
     </script>

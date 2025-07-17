@@ -1,7 +1,10 @@
-import os
-from google import genai
 from typing import Any
 from src.utils import file_io, json_utils
+from src.core.gemini import request_gemini
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def create_section_timestamps(
@@ -10,70 +13,60 @@ def create_section_timestamps(
     title_length_range: tuple[int, int] = (3, 8),
     output_file: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Generates YouTube-style section timestamps using AI.
+    """Generates YouTube-style section timestamps with optional speaker info.
 
     Args:
         transcript: Transcript data from extract_transcript()
-        section_count_range: Number of sections, [lower limit, upper limit]
-        title_length_range: Words in the title, [lower limit, upper limit]
+        section_count_range: Number of sections [min, max]
+        title_length_range: Words in title [min, max]
         output_file: Optional file path to save sections
 
     Returns:
         List of sections with start times and titles
-
-    Raises:
-        Exception: If API call fails or response is invalid
     """
 
     try:
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment variables")
+        # Format transcript with speaker info if available
+        transcript_lines = []
+        for seg in transcript:
+            speaker = f"[{seg['speaker']}] " if "speaker" in seg else ""
+            transcript_lines.append(f"[{seg['start']:.1f}s] {speaker}{seg['text']}")
+        formatted_transcript = "\n".join(transcript_lines)
 
-        formatted_transcript = "\n".join(
-            f"[{segment['start']:.1f}s] {segment['text']}" for segment in transcript
-        )
+        prompt = f"""
+        Create YouTube-style chapter markers from this transcript.
+        Return ONLY valid JSON with this structure:
+        [{"start": seconds, 'title': string}, ...]
 
-        client = genai.Client(api_key=api_key)
+        Rules:
+        1. Create {section_count_range[0]}-{section_count_range[1]} sections
+        2. Start time in seconds (float)
+        3. {title_length_range[0]}-{title_length_range[1]} word titles
+        4. Capture key topics
+        5. Output ONLY the JSON array
+        6. In the language of the script
 
-        prompt = (
-            "Create YouTube-style chapter markers from this transcript. "
-            "Return ONLY valid JSON with this structure: "
-            "[{'start': seconds, 'title': string}, ...]\n\n"
-            "Rules:\n"
-            f"1. Create {section_count_range[0]}-{section_count_range[1]} sections\n"
-            "2. Start time in seconds (float)\n"
-            f"3. {title_length_range[0]}-{title_length_range[1]} word titles\n"
-            "4. Capture key topics\n"
-            "5. Output ONLY the JSON array\n"
-            "6. In the language of the script\n\n"
-            f"Transcript:\n{formatted_transcript}"
-        )
+        Transcript:
+        {formatted_transcript}
+        """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            # config=types.GenerateContentConfig(
-            #     thinking_config=types.ThinkingConfig(thinking_budget=0) # Disables thinking
-            # ),
-        )
-        sections = json_utils.extract_json(response.text.strip())
+        response_text = request_gemini(prompt)
+        sections = json_utils.extract_json(response_text)
 
-        # Validate sections format
-        # if not all(("start" in sec and "title" in sec) for sec in sections):
-        #     raise ValueError("Invalid section format in AI response")
+        # Validate sections
         if not isinstance(sections, list) or not all(
-            isinstance(sec, dict) and "start" in sec and "title" in sec
+            isinstance(sec, dict) and all(k in sec for k in ["start", "title"])
             for sec in sections
         ):
             raise ValueError("Invalid section format in AI response")
 
+        # Save output
         if output_file:
             file_io.write_to_file(sections, output_file)
-            print(f"Section timestamps saved to {output_file}")
+            logger.info(f"Section timestamps saved to {output_file}")
 
         return sections
 
     except Exception as e:
-        print(f"Error generating sections: {e}")
+        logger.error(f"Error generating sections: {e}")
         raise
