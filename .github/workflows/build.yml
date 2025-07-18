@@ -94,13 +94,13 @@ jobs:
       - name: Upload Linux binary
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/webapp-linux
+          files: dist/webapp-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows binary
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/webapp-win.exe
+          files: dist/webapp-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
