@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write          # ← allows “create a release”
+  packages: read           # (keep whatever else you need)
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
