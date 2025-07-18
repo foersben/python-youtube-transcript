@@ -77,11 +77,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapp-ubuntu-latest
+          path: .
 
       - name: Download Windows build
         uses: actions/download-artifact@v4
         with:
           name: webapp-windows-latest
+          path: .
 
       - name: Create GitHub Release
         id: create_release
@@ -91,16 +93,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Linux binary
+      - name: Upload binaries to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/webapp-*
+          tag_name: ${{ github.ref_name }}
+          files: |
+              dist/webapp-linux
+              dist/webapp-win.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Upload Linux binary
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: dist/webapp-*
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows binary
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/webapp-*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Upload Windows binary
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: dist/webapp-*
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
