@@ -49,7 +49,7 @@ jobs:
             app.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: webapp-${{ matrix.os }}
           path: |
@@ -62,12 +62,12 @@ jobs:
 
     steps:
       - name: Download Linux build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: webapp-ubuntu-latest
 
       - name: Download Windows build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: webapp-windows-latest
 
