@@ -77,13 +77,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webapp-ubuntu-latest
-          path: .
+          path: dist-linux
 
       - name: Download Windows build
         uses: actions/download-artifact@v4
         with:
           name: webapp-windows-latest
-          path: .
+          path: dist-win
 
       - name: Create GitHub Release
         id: create_release
@@ -98,8 +98,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-              dist/webapp-linux
-              dist/webapp-win.exe
+              dist-linux/webapp-linux
+              dist-win/webapp-win.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # - name: Upload Linux binary
