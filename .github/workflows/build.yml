@@ -1,0 +1,94 @@
+name: 📦 Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: [3.12]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Install PyInstaller
+        run: poetry run pip install pyinstaller
+
+      - name: Package with PyInstaller
+        run: |
+          rm -rf build dist
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            sep=";"
+            out="webapp-win.exe"
+          else
+            sep=":"
+            out="webapp-linux"
+          fi
+          poetry run pyinstaller \
+            --onefile \
+            --name $out \
+            --add-data "templates${sep}templates" \
+            --add-data "static${sep}static" \
+            app.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: webapp-${{ matrix.os }}
+          path: |
+            dist/webapp-linux
+            dist/webapp-win.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux build
+        uses: actions/download-artifact@v3
+        with:
+          name: webapp-ubuntu-latest
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v3
+        with:
+          name: webapp-windows-latest
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux binary
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/webapp-linux
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows binary
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/webapp-win.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
