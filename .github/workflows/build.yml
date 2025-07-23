@@ -14,8 +14,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: [3.12]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: [3.13]
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -46,10 +46,13 @@ jobs:
         shell: bash
         run: |
           rm -rf build dist
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then # windows latest
             sep=";"
             out="webapp-win.exe"
-          else
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then # macOS latest
+            sep=":"
+            out="webapp-mac"
+          else # ubuntu-latest
             sep=":"
             out="webapp-linux"
           fi
@@ -64,54 +67,65 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: webapp-${{ matrix.os }}
-          path: |
-            dist/webapp-linux
-            dist/webapp-win.exe
+          path: dist/webapp-*
+          # path: |
+          #   dist/webapp-linux
+          #   dist/webapp-win.exe
+
+  # release:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Download Linux build
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: webapp-ubuntu-latest
+  #         path: dist-linux
+
+  #     - name: Download Windows build
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: webapp-windows-latest
+  #         path: dist-win
+
+  #     - name: Create GitHub Release
+  #       id: create_release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         tag_name: ${{ github.ref_name }}
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  #     - name: Upload binaries to Release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         tag_name: ${{ github.ref_name }}
+  #         files: |
+  #             dist-linux/webapp-linux
+  #             dist-win/webapp-win.exe
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download Linux build
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: webapp-ubuntu-latest
-          path: dist-linux
+          # Download all artifacts into a 'dist' directory
+          # Each artifact will be in a subdirectory named after the artifact
+          path: dist
 
-      - name: Download Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: webapp-windows-latest
-          path: dist-win
-
-      - name: Create GitHub Release
-        id: create_release
+      - name: Create GitHub Release and Upload Binaries
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload binaries to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
+          # List all executables from their respective artifact directories
           files: |
-              dist-linux/webapp-linux
-              dist-win/webapp-win.exe
+            dist/webapp-ubuntu-latest/webapp-linux
+            dist/webapp-windows-latest/webapp-win.exe
+            dist/webapp-macos-latest/webapp-mac
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # - name: Upload Linux binary
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: dist/webapp-*
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # - name: Upload Windows binary
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: dist/webapp-*
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
